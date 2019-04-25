@@ -98,7 +98,7 @@ static rpa_status_t queue_destroy(void *data)
 /**
  * Initialize the rpa_queue_t.
  */
-APU_DECLARE(rpa_status_t) rpa_queue_create(rpa_queue_t **q, 
+rpa_status_t rpa_queue_create(rpa_queue_t **q, 
                                            unsigned int queue_capacity, 
                                            rpa_pool_t *a)
 {
@@ -145,7 +145,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_create(rpa_queue_t **q,
  * the push operation has completed, it signals other threads waiting
  * in rpa_queue_pop() that they may continue consuming sockets.
  */
-APU_DECLARE(rpa_status_t) rpa_queue_push(rpa_queue_t *queue, void *data)
+rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data)
 {
     rpa_status_t rv;
 
@@ -208,7 +208,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_push(rpa_queue_t *queue, void *data)
  * the push operation completes successfully, it signals other threads
  * waiting in rpa_queue_pop() that they may continue consuming sockets.
  */
-APU_DECLARE(rpa_status_t) rpa_queue_trypush(rpa_queue_t *queue, void *data)
+rpa_status_t rpa_queue_trypush(rpa_queue_t *queue, void *data)
 {
     rpa_status_t rv;
 
@@ -248,7 +248,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_trypush(rpa_queue_t *queue, void *data)
 /**
  * not thread safe
  */
-APU_DECLARE(unsigned int) rpa_queue_size(rpa_queue_t *queue) {
+unsigned int rpa_queue_size(rpa_queue_t *queue) {
     return queue->nelts;
 }
 
@@ -258,7 +258,7 @@ APU_DECLARE(unsigned int) rpa_queue_size(rpa_queue_t *queue) {
  * Once retrieved, the item is placed into the address specified by
  * 'data'.
  */
-APU_DECLARE(rpa_status_t) rpa_queue_pop(rpa_queue_t *queue, void **data)
+rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data)
 {
     rpa_status_t rv;
 
@@ -322,7 +322,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_pop(rpa_queue_t *queue, void **data)
  * items available, return RPA_EAGAIN.  Once retrieved,
  * the item is placed into the address specified by 'data'.
  */
-APU_DECLARE(rpa_status_t) rpa_queue_trypop(rpa_queue_t *queue, void **data)
+rpa_status_t rpa_queue_trypop(rpa_queue_t *queue, void **data)
 {
     rpa_status_t rv;
 
@@ -359,7 +359,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_trypop(rpa_queue_t *queue, void **data)
     return rv;
 }
 
-APU_DECLARE(rpa_status_t) rpa_queue_interrupt_all(rpa_queue_t *queue)
+rpa_status_t rpa_queue_interrupt_all(rpa_queue_t *queue)
 {
     rpa_status_t rv;
     Q_DBG("intr all", queue);    
@@ -376,7 +376,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_interrupt_all(rpa_queue_t *queue)
     return RPA_SUCCESS;
 }
 
-APU_DECLARE(rpa_status_t) rpa_queue_term(rpa_queue_t *queue)
+rpa_status_t rpa_queue_term(rpa_queue_t *queue)
 {
     rpa_status_t rv;
 

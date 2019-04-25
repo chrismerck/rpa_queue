@@ -52,7 +52,7 @@ typedef struct rpa_queue_t rpa_queue_t;
  * @param queue_capacity maximum size of the queue
  * @param a pool to allocate queue from
  */
-APU_DECLARE(rpa_status_t) rpa_queue_create(rpa_queue_t **queue, 
+rpa_status_t rpa_queue_create(rpa_queue_t **queue, 
                                            unsigned int queue_capacity, 
                                            rpa_pool_t *a);
 
@@ -65,7 +65,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_create(rpa_queue_t **queue,
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful push
  */
-APU_DECLARE(rpa_status_t) rpa_queue_push(rpa_queue_t *queue, void *data);
+rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object from the queue, blocking if the queue is already empty
@@ -76,7 +76,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_push(rpa_queue_t *queue, void *data);
  * @returns RPA_EOF if the queue has been terminated
  * @returns RPA_SUCCESS on a successful pop
  */
-APU_DECLARE(rpa_status_t) rpa_queue_pop(rpa_queue_t *queue, void **data);
+rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data);
 
 /**
  * push/add an object to the queue, returning immediately if the queue is full
@@ -88,7 +88,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_pop(rpa_queue_t *queue, void **data);
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful push
  */
-APU_DECLARE(rpa_status_t) rpa_queue_trypush(rpa_queue_t *queue, void *data);
+rpa_status_t rpa_queue_trypush(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object to the queue, returning immediately if the queue is empty
@@ -100,7 +100,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_trypush(rpa_queue_t *queue, void *data);
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful pop
  */
-APU_DECLARE(rpa_status_t) rpa_queue_trypop(rpa_queue_t *queue, void **data);
+rpa_status_t rpa_queue_trypop(rpa_queue_t *queue, void **data);
 
 /**
  * returns the size of the queue.
@@ -110,14 +110,14 @@ APU_DECLARE(rpa_status_t) rpa_queue_trypop(rpa_queue_t *queue, void **data);
  * @param queue the queue
  * @returns the size of the queue
  */
-APU_DECLARE(unsigned int) rpa_queue_size(rpa_queue_t *queue);
+unsigned int rpa_queue_size(rpa_queue_t *queue);
 
 /**
  * interrupt all the threads blocking on this queue.
  *
  * @param queue the queue
  */
-APU_DECLARE(rpa_status_t) rpa_queue_interrupt_all(rpa_queue_t *queue);
+rpa_status_t rpa_queue_interrupt_all(rpa_queue_t *queue);
 
 /**
  * terminate the queue, sending an interrupt to all the
@@ -125,7 +125,7 @@ APU_DECLARE(rpa_status_t) rpa_queue_interrupt_all(rpa_queue_t *queue);
  *
  * @param queue the queue
  */
-APU_DECLARE(rpa_status_t) rpa_queue_term(rpa_queue_t *queue);
+rpa_status_t rpa_queue_term(rpa_queue_t *queue);
 
 #ifdef __cplusplus
 }
