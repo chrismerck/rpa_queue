@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef APR_QUEUE_H
-#define APR_QUEUE_H
+#ifndef RPA_QUEUE_H
+#define RPA_QUEUE_H
 
 /**
- * @file apr_queue.h
+ * @file rpa_queue.h
  * @brief Thread Safe FIFO bounded queue
  * @note Since most implementations of the queue are backed by a condition
  * variable implementation, it isn't available on systems without threads.
@@ -26,25 +26,25 @@
  */
 
 #include "apu.h"
-#include "apr_errno.h"
-#include "apr_pools.h"
+#include "rpa_errno.h"
+#include "rpa_pools.h"
 
-#if APR_HAS_THREADS
+#if RPA_HAS_THREADS
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 /**
- * @defgroup APR_Util_FIFO Thread Safe FIFO bounded queue
- * @ingroup APR_Util
+ * @defgroup RPA_Util_FIFO Thread Safe FIFO bounded queue
+ * @ingroup RPA_Util
  * @{
  */
 
 /**
  * opaque structure
  */
-typedef struct apr_queue_t apr_queue_t;
+typedef struct rpa_queue_t rpa_queue_t;
 
 /** 
  * create a FIFO queue
@@ -52,55 +52,55 @@ typedef struct apr_queue_t apr_queue_t;
  * @param queue_capacity maximum size of the queue
  * @param a pool to allocate queue from
  */
-APU_DECLARE(apr_status_t) apr_queue_create(apr_queue_t **queue, 
+APU_DECLARE(rpa_status_t) rpa_queue_create(rpa_queue_t **queue, 
                                            unsigned int queue_capacity, 
-                                           apr_pool_t *a);
+                                           rpa_pool_t *a);
 
 /**
  * push/add an object to the queue, blocking if the queue is already full
  *
  * @param queue the queue
  * @param data the data
- * @returns APR_EINTR the blocking was interrupted (try again)
- * @returns APR_EOF the queue has been terminated
- * @returns APR_SUCCESS on a successful push
+ * @returns RPA_EINTR the blocking was interrupted (try again)
+ * @returns RPA_EOF the queue has been terminated
+ * @returns RPA_SUCCESS on a successful push
  */
-APU_DECLARE(apr_status_t) apr_queue_push(apr_queue_t *queue, void *data);
+APU_DECLARE(rpa_status_t) rpa_queue_push(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object from the queue, blocking if the queue is already empty
  *
  * @param queue the queue
  * @param data the data
- * @returns APR_EINTR the blocking was interrupted (try again)
- * @returns APR_EOF if the queue has been terminated
- * @returns APR_SUCCESS on a successful pop
+ * @returns RPA_EINTR the blocking was interrupted (try again)
+ * @returns RPA_EOF if the queue has been terminated
+ * @returns RPA_SUCCESS on a successful pop
  */
-APU_DECLARE(apr_status_t) apr_queue_pop(apr_queue_t *queue, void **data);
+APU_DECLARE(rpa_status_t) rpa_queue_pop(rpa_queue_t *queue, void **data);
 
 /**
  * push/add an object to the queue, returning immediately if the queue is full
  *
  * @param queue the queue
  * @param data the data
- * @returns APR_EINTR the blocking operation was interrupted (try again)
- * @returns APR_EAGAIN the queue is full
- * @returns APR_EOF the queue has been terminated
- * @returns APR_SUCCESS on a successful push
+ * @returns RPA_EINTR the blocking operation was interrupted (try again)
+ * @returns RPA_EAGAIN the queue is full
+ * @returns RPA_EOF the queue has been terminated
+ * @returns RPA_SUCCESS on a successful push
  */
-APU_DECLARE(apr_status_t) apr_queue_trypush(apr_queue_t *queue, void *data);
+APU_DECLARE(rpa_status_t) rpa_queue_trypush(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object to the queue, returning immediately if the queue is empty
  *
  * @param queue the queue
  * @param data the data
- * @returns APR_EINTR the blocking operation was interrupted (try again)
- * @returns APR_EAGAIN the queue is empty
- * @returns APR_EOF the queue has been terminated
- * @returns APR_SUCCESS on a successful pop
+ * @returns RPA_EINTR the blocking operation was interrupted (try again)
+ * @returns RPA_EAGAIN the queue is empty
+ * @returns RPA_EOF the queue has been terminated
+ * @returns RPA_SUCCESS on a successful pop
  */
-APU_DECLARE(apr_status_t) apr_queue_trypop(apr_queue_t *queue, void **data);
+APU_DECLARE(rpa_status_t) rpa_queue_trypop(rpa_queue_t *queue, void **data);
 
 /**
  * returns the size of the queue.
@@ -110,14 +110,14 @@ APU_DECLARE(apr_status_t) apr_queue_trypop(apr_queue_t *queue, void **data);
  * @param queue the queue
  * @returns the size of the queue
  */
-APU_DECLARE(unsigned int) apr_queue_size(apr_queue_t *queue);
+APU_DECLARE(unsigned int) rpa_queue_size(rpa_queue_t *queue);
 
 /**
  * interrupt all the threads blocking on this queue.
  *
  * @param queue the queue
  */
-APU_DECLARE(apr_status_t) apr_queue_interrupt_all(apr_queue_t *queue);
+APU_DECLARE(rpa_status_t) rpa_queue_interrupt_all(rpa_queue_t *queue);
 
 /**
  * terminate the queue, sending an interrupt to all the
@@ -125,7 +125,7 @@ APU_DECLARE(apr_status_t) apr_queue_interrupt_all(apr_queue_t *queue);
  *
  * @param queue the queue
  */
-APU_DECLARE(apr_status_t) apr_queue_term(apr_queue_t *queue);
+APU_DECLARE(rpa_status_t) rpa_queue_term(rpa_queue_t *queue);
 
 #ifdef __cplusplus
 }
@@ -133,6 +133,6 @@ APU_DECLARE(apr_status_t) apr_queue_term(apr_queue_t *queue);
 
 /** @} */
 
-#endif /* APR_HAS_THREADS */
+#endif /* RPA_HAS_THREADS */
 
-#endif /* APRQUEUE_H */
+#endif /* RPAQUEUE_H */
