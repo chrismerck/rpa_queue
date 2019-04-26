@@ -39,7 +39,7 @@ struct rpa_queue_t {
 };
 
 #ifdef QUEUE_DEBUG
-static void Q_DBG(char*msg, rpa_queue_t *q) {
+static void Q_DBG(const char*msg, rpa_queue_t *q) {
   fprintf(stderr, "#%d in %d out %d\t%s\n",
           q->nelts, q->in, q->out,
           msg
@@ -80,17 +80,12 @@ static void set_timeout(struct timespec * abstime, int wait_ms)
  * Callback routine that is called to destroy this
  * rpa_queue_t when its pool is destroyed.
  */
-static bool queue_destroy(void *data)
+void rpa_queue_destroy(rpa_queue_t * queue)
 {
-  rpa_queue_t *queue = data;
-
   /* Ignore errors here, we can't do anything about them anyway. */
-
   pthread_cond_destroy(queue->not_empty);
   pthread_cond_destroy(queue->not_full);
   pthread_mutex_destroy(queue->one_big_mutex);
-
-  return true;
 }
 
 /**

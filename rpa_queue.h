@@ -146,4 +146,11 @@ bool rpa_queue_interrupt_all(rpa_queue_t *queue);
  */
 bool rpa_queue_term(rpa_queue_t *queue);
 
+/**
+ * destroy queue
+ * @param  queue
+ * @return     always true
+ */
+void rpa_queue_destroy(rpa_queue_t * queue);
+
 #endif /* RPAQUEUE_H */
