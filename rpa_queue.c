@@ -40,7 +40,7 @@ struct rpa_queue_t {
 
 #ifdef QUEUE_DEBUG
 static void Q_DBG(char*msg, rpa_queue_t *q) {
-  fprintf(stderr, "%d in %d out %d\t%s\n",
+  fprintf(stderr, "#%d in %d out %d\t%s\n",
           q->nelts, q->in, q->out,
           msg
           );
@@ -60,6 +60,21 @@ static void Q_DBG(char*msg, rpa_queue_t *q) {
  * to be called from within critical sections, and is not threadsafe.
  */
 #define rpa_queue_empty(queue) ((queue)->nelts == 0)
+
+static void set_timeout(struct timespec * abstime, int wait_ms)
+{
+  clock_gettime(CLOCK_REALTIME, abstime);
+  /* add seconds */
+  abstime->tv_sec += (wait_ms / 1000);
+  /* add and carry microseconds */
+  long ms = abstime->tv_nsec / 1000000L;
+  ms += wait_ms % 1000;
+  while (ms > 1000) {
+    ms -= 1000;
+    abstime->tv_sec += 1;
+  }
+  abstime->tv_nsec = ms * 1000000L;
+}
 
 /**
  * Callback routine that is called to destroy this
@@ -140,7 +155,14 @@ error:
  */
 bool rpa_queue_push(rpa_queue_t *queue, void *data)
 {
+  return rpa_queue_timedpush(queue, data, RPA_WAIT_FOREVER);
+}
+
+bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms)
+{
   bool rv;
+
+  if (wait_ms == RPA_WAIT_NONE) return rpa_queue_trypush(queue, data);
 
   if (queue->terminated) {
     return false; /* no more elements ever again */
@@ -155,7 +177,14 @@ bool rpa_queue_push(rpa_queue_t *queue, void *data)
   if (rpa_queue_full(queue)) {
     if (!queue->terminated) {
       queue->full_waiters++;
-      rv = pthread_cond_wait(queue->not_full, queue->one_big_mutex);
+      if (wait_ms == RPA_WAIT_FOREVER) {
+        rv = pthread_cond_wait(queue->not_full, queue->one_big_mutex);
+      } else {
+        struct timespec abstime;
+        set_timeout(&abstime, wait_ms);
+        rv = pthread_cond_timedwait(queue->not_full, queue->one_big_mutex,
+          &abstime);
+      }
       queue->full_waiters--;
       if (rv != 0) {
         pthread_mutex_unlock(queue->one_big_mutex);
@@ -255,7 +284,14 @@ uint32_t rpa_queue_size(rpa_queue_t *queue) {
  */
 bool rpa_queue_pop(rpa_queue_t *queue, void **data)
 {
+  return rpa_queue_timedpop(queue, data, RPA_WAIT_FOREVER);
+}
+
+bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms)
+{
   bool rv;
+
+  if (wait_ms == RPA_WAIT_NONE) return rpa_queue_trypop(queue, data);
 
   if (queue->terminated) {
     return false; /* no more elements ever again */
@@ -270,7 +306,14 @@ bool rpa_queue_pop(rpa_queue_t *queue, void **data)
   if (rpa_queue_empty(queue)) {
     if (!queue->terminated) {
       queue->empty_waiters++;
-      rv = pthread_cond_wait(queue->not_empty, queue->one_big_mutex);
+      if (wait_ms == RPA_WAIT_FOREVER) {
+        rv = pthread_cond_wait(queue->not_empty, queue->one_big_mutex);
+      } else {
+        struct timespec abstime;
+        set_timeout(&abstime, wait_ms);
+        rv = pthread_cond_timedwait(queue->not_empty, queue->one_big_mutex,
+          &abstime);
+      }
       queue->empty_waiters--;
       if (rv != 0) {
         pthread_mutex_unlock(queue->one_big_mutex);

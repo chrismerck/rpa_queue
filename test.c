@@ -37,6 +37,37 @@ bool test()
     printf("pop succeeded when it should have failed\n");
     return false;
   }
+  /* try the timed versions */
+  if (!rpa_queue_timedpush(queue, "item 1", 100)) {
+    printf("failed to push item\n");
+    return false;
+  }
+  if (!rpa_queue_timedpush(queue, "item 2", 100)) {
+    printf("failed to trypush item\n");
+    return false;
+  }
+  printf("timedpush when full..."); fflush(stdout);
+  if (rpa_queue_timedpush(queue, "item 3", 1000)) {
+    printf("item 3 accepted when it should have blocked\n");
+    return false;
+  }
+  printf("DONE!\n");
+  if (!rpa_queue_timedpop(queue, (void**) &data, 1000)) {
+    printf("pop failed\n");
+    return false;
+  }
+  printf("popped: %s\n", data);
+  if (!rpa_queue_timedpop(queue, (void**) &data, 1000)) {
+    printf("trypop failed\n");
+    return false;
+  }
+  printf("popped: %s\n", data);
+  printf("timedpop when empty..."); fflush(stdout);
+  if (rpa_queue_timedpop(queue, (void**) &data, 1000)) {
+    printf("pop succeeded when it should have failed\n");
+    return false;
+  }
+  printf("DONE!\n");
   return true;
 }
 

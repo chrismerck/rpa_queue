@@ -21,6 +21,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define RPA_WAIT_NONE     0
+#define RPA_WAIT_FOREVER  -1
+
 /**
  * @file rpa_queue.h
  * @brief Thread Safe FIFO bounded queue
@@ -60,6 +63,18 @@ bool rpa_queue_create(rpa_queue_t **queue, uint32_t queue_capacity);
 bool rpa_queue_push(rpa_queue_t *queue, void *data);
 
 /**
+ * push/add an object to the queue, blocking if the queue is already full
+ *
+ * @param queue         the queue
+ * @param data          the data
+ * @param wait_ms       milliseconds to wait
+ * @returns RPA_EINTR   the blocking was interrupted (try again)
+ * @returns RPA_EOF     the queue has been terminated
+ * @returns RPA_SUCCESS on a successful push
+ */
+bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms);
+
+/**
  * pop/get an object from the queue, blocking if the queue is already empty
  *
  * @param queue the queue
@@ -69,6 +84,18 @@ bool rpa_queue_push(rpa_queue_t *queue, void *data);
  * @returns RPA_SUCCESS on a successful pop
  */
 bool rpa_queue_pop(rpa_queue_t *queue, void **data);
+
+/**
+ * pop/get an object from the queue, blocking if the queue is already empty
+ *
+ * @param queue         the queue
+ * @param data          the data
+ * @param wait_ms       milliseconds to wait
+ * @returns RPA_EINTR   the blocking was interrupted (try again)
+ * @returns RPA_EOF     if the queue has been terminated
+ * @returns RPA_SUCCESS on a successful pop
+ */
+bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms);
 
 /**
  * push/add an object to the queue, returning immediately if the queue is full
