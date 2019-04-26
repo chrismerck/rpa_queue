@@ -5,7 +5,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,10 @@
 #ifndef RPA_QUEUE_H
 #define RPA_QUEUE_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+
 /**
  * @file rpa_queue.h
  * @brief Thread Safe FIFO bounded queue
@@ -24,16 +28,6 @@
  * variable implementation, it isn't available on systems without threads.
  * Although condition variables are sometimes available without threads.
  */
-
-#include "apu.h"
-#include "rpa_errno.h"
-#include "rpa_pools.h"
-
-#if RPA_HAS_THREADS
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
 
 /**
  * @defgroup RPA_Util_FIFO Thread Safe FIFO bounded queue
@@ -46,15 +40,13 @@ extern "C" {
  */
 typedef struct rpa_queue_t rpa_queue_t;
 
-/** 
+/**
  * create a FIFO queue
  * @param queue The new queue
  * @param queue_capacity maximum size of the queue
  * @param a pool to allocate queue from
  */
-rpa_status_t rpa_queue_create(rpa_queue_t **queue, 
-                                           unsigned int queue_capacity, 
-                                           rpa_pool_t *a);
+bool rpa_queue_create(rpa_queue_t **queue, uint32_t queue_capacity);
 
 /**
  * push/add an object to the queue, blocking if the queue is already full
@@ -65,7 +57,7 @@ rpa_status_t rpa_queue_create(rpa_queue_t **queue,
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful push
  */
-rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data);
+bool rpa_queue_push(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object from the queue, blocking if the queue is already empty
@@ -76,7 +68,7 @@ rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data);
  * @returns RPA_EOF if the queue has been terminated
  * @returns RPA_SUCCESS on a successful pop
  */
-rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data);
+bool rpa_queue_pop(rpa_queue_t *queue, void **data);
 
 /**
  * push/add an object to the queue, returning immediately if the queue is full
@@ -88,7 +80,7 @@ rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data);
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful push
  */
-rpa_status_t rpa_queue_trypush(rpa_queue_t *queue, void *data);
+bool rpa_queue_trypush(rpa_queue_t *queue, void *data);
 
 /**
  * pop/get an object to the queue, returning immediately if the queue is empty
@@ -100,7 +92,7 @@ rpa_status_t rpa_queue_trypush(rpa_queue_t *queue, void *data);
  * @returns RPA_EOF the queue has been terminated
  * @returns RPA_SUCCESS on a successful pop
  */
-rpa_status_t rpa_queue_trypop(rpa_queue_t *queue, void **data);
+bool rpa_queue_trypop(rpa_queue_t *queue, void **data);
 
 /**
  * returns the size of the queue.
@@ -110,14 +102,14 @@ rpa_status_t rpa_queue_trypop(rpa_queue_t *queue, void **data);
  * @param queue the queue
  * @returns the size of the queue
  */
-unsigned int rpa_queue_size(rpa_queue_t *queue);
+uint32_t rpa_queue_size(rpa_queue_t *queue);
 
 /**
  * interrupt all the threads blocking on this queue.
  *
  * @param queue the queue
  */
-rpa_status_t rpa_queue_interrupt_all(rpa_queue_t *queue);
+bool rpa_queue_interrupt_all(rpa_queue_t *queue);
 
 /**
  * terminate the queue, sending an interrupt to all the
@@ -125,14 +117,6 @@ rpa_status_t rpa_queue_interrupt_all(rpa_queue_t *queue);
  *
  * @param queue the queue
  */
-rpa_status_t rpa_queue_term(rpa_queue_t *queue);
-
-#ifdef __cplusplus
-}
-#endif
-
-/** @} */
-
-#endif /* RPA_HAS_THREADS */
+bool rpa_queue_term(rpa_queue_t *queue);
 
 #endif /* RPAQUEUE_H */

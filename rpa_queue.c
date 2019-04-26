@@ -5,7 +5,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,56 +14,39 @@
  * limitations under the License.
  */
 
-#include "rpa.h"
-
-#if RPA_HAVE_STDIO_H
-#include <stdio.h>
-#endif
-#if RPA_HAVE_STDLIB_H
-#include <stdlib.h>
-#endif
-#if RPA_HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#include "apu.h"
-#include "rpa_portable.h"
-#include "rpa_thread_mutex.h"
-#include "rpa_thread_cond.h"
-#include "rpa_errno.h"
 #include "rpa_queue.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <string.h>
 
-#if RPA_HAS_THREADS
-/* 
- * define this to get debug messages
- *
+// uncomment to print debug messages
 #define QUEUE_DEBUG
- */
 
 struct rpa_queue_t {
-    void              **data;
-    unsigned int        nelts; /**< # elements */
-    unsigned int        in;    /**< next empty location */
-    unsigned int        out;   /**< next filled location */
-    unsigned int        bounds;/**< max size of queue */
-    unsigned int        full_waiters;
-    unsigned int        empty_waiters;
-    rpa_thread_mutex_t *one_big_mutex;
-    rpa_thread_cond_t  *not_empty;
-    rpa_thread_cond_t  *not_full;
-    int                 terminated;
+  void **data;
+  volatile uint32_t nelts; /**< # elements */
+  uint32_t in;  /**< next empty location */
+  uint32_t out;   /**< next filled location */
+  uint32_t bounds;/**< max size of queue */
+  uint32_t full_waiters;
+  uint32_t empty_waiters;
+  pthread_mutex_t *one_big_mutex;
+  pthread_cond_t *not_empty;
+  pthread_cond_t *not_full;
+  int terminated;
 };
 
 #ifdef QUEUE_DEBUG
 static void Q_DBG(char*msg, rpa_queue_t *q) {
-    fprintf(stderr, "%ld\t#%d in %d out %d\t%s\n", 
-                    rpa_os_thread_current(),
-                    q->nelts, q->in, q->out,
-                    msg
-                    );
+  fprintf(stderr, "%d in %d out %d\t%s\n",
+          q->nelts, q->in, q->out,
+          msg
+          );
 }
 #else
-#define Q_DBG(x,y) 
+#define Q_DBG(x,y)
 #endif
 
 /**
@@ -82,62 +65,72 @@ static void Q_DBG(char*msg, rpa_queue_t *q) {
  * Callback routine that is called to destroy this
  * rpa_queue_t when its pool is destroyed.
  */
-static rpa_status_t queue_destroy(void *data) 
+static bool queue_destroy(void *data)
 {
-    rpa_queue_t *queue = data;
+  rpa_queue_t *queue = data;
 
-    /* Ignore errors here, we can't do anything about them anyway. */
+  /* Ignore errors here, we can't do anything about them anyway. */
 
-    rpa_thread_cond_destroy(queue->not_empty);
-    rpa_thread_cond_destroy(queue->not_full);
-    rpa_thread_mutex_destroy(queue->one_big_mutex);
+  pthread_cond_destroy(queue->not_empty);
+  pthread_cond_destroy(queue->not_full);
+  pthread_mutex_destroy(queue->one_big_mutex);
 
-    return RPA_SUCCESS;
+  return true;
 }
 
 /**
  * Initialize the rpa_queue_t.
  */
-rpa_status_t rpa_queue_create(rpa_queue_t **q, 
-                                           unsigned int queue_capacity, 
-                                           rpa_pool_t *a)
+bool rpa_queue_create(rpa_queue_t **q, uint32_t queue_capacity)
 {
-    rpa_status_t rv;
-    rpa_queue_t *queue;
-    queue = rpa_palloc(a, sizeof(rpa_queue_t));
-    *q = queue;
+  rpa_queue_t *queue;
+  queue = malloc(sizeof(rpa_queue_t));
+  if (!queue) {
+    return false;
+  }
+  *q = queue;
+  memset(queue, 0, sizeof(rpa_queue_t));
 
-    /* nested doesn't work ;( */
-    rv = rpa_thread_mutex_create(&queue->one_big_mutex,
-                                 RPA_THREAD_MUTEX_UNNESTED,
-                                 a);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
+  if (!(queue->one_big_mutex = malloc(sizeof(pthread_mutex_t)))) return false;
+  if (!(queue->not_empty = malloc(sizeof(pthread_cond_t)))) return false;
+  if (!(queue->not_full = malloc(sizeof(pthread_cond_t)))) return false;
 
-    rv = rpa_thread_cond_create(&queue->not_empty, a);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  int rv = pthread_mutex_init(queue->one_big_mutex, &attr);
+  if (rv != 0) {
+    Q_DBG("pthread_mutex_init failed", queue);
+    goto error;
+  }
 
-    rv = rpa_thread_cond_create(&queue->not_full, a);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
+  rv = pthread_cond_init(queue->not_empty, NULL);
+  if (rv != 0) {
+    Q_DBG("pthread_cond_init not_empty failed", queue);
+    goto error;
+  }
 
-    /* Set all the data in the queue to NULL */
-    queue->data = rpa_pcalloc(a, queue_capacity * sizeof(void*));
-    queue->bounds = queue_capacity;
-    queue->nelts = 0;
-    queue->in = 0;
-    queue->out = 0;
-    queue->terminated = 0;
-    queue->full_waiters = 0;
-    queue->empty_waiters = 0;
+  rv = pthread_cond_init(queue->not_full, NULL);
+  if (rv != 0) {
+    Q_DBG("pthread_cond_init not_full failed", queue);
+    goto error;
+  }
 
-    rpa_pool_cleanup_register(a, queue, queue_destroy, rpa_pool_cleanup_null);
+  /* Set all the data in the queue to NULL */
+  queue->data = malloc(queue_capacity * sizeof(void*));
+  queue->bounds = queue_capacity;
+  queue->nelts = 0;
+  queue->in = 0;
+  queue->out = 0;
+  queue->terminated = 0;
+  queue->full_waiters = 0;
+  queue->empty_waiters = 0;
 
-    return RPA_SUCCESS;
+  return true;
+
+error:
+  free(queue);
+  return false;
 }
 
 /**
@@ -145,62 +138,63 @@ rpa_status_t rpa_queue_create(rpa_queue_t **q,
  * the push operation has completed, it signals other threads waiting
  * in rpa_queue_pop() that they may continue consuming sockets.
  */
-rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data)
+bool rpa_queue_push(rpa_queue_t *queue, void *data)
 {
-    rpa_status_t rv;
+  bool rv;
 
-    if (queue->terminated) {
-        return RPA_EOF; /* no more elements ever again */
+  if (queue->terminated) {
+    return false; /* no more elements ever again */
+  }
+
+  rv = pthread_mutex_lock(queue->one_big_mutex);
+  if (rv != 0) {
+    Q_DBG("failed to lock mutex", queue);
+    return false;
+  }
+
+  if (rpa_queue_full(queue)) {
+    if (!queue->terminated) {
+      queue->full_waiters++;
+      rv = pthread_cond_wait(queue->not_full, queue->one_big_mutex);
+      queue->full_waiters--;
+      if (rv != 0) {
+        pthread_mutex_unlock(queue->one_big_mutex);
+        return false;
+      }
     }
-
-    rv = rpa_thread_mutex_lock(queue->one_big_mutex);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
-
+    /* If we wake up and it's still empty, then we were interrupted */
     if (rpa_queue_full(queue)) {
-        if (!queue->terminated) {
-            queue->full_waiters++;
-            rv = rpa_thread_cond_wait(queue->not_full, queue->one_big_mutex);
-            queue->full_waiters--;
-            if (rv != RPA_SUCCESS) {
-                rpa_thread_mutex_unlock(queue->one_big_mutex);
-                return rv;
-            }
-        }
-        /* If we wake up and it's still empty, then we were interrupted */
-        if (rpa_queue_full(queue)) {
-            Q_DBG("queue full (intr)", queue);
-            rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-            if (rv != RPA_SUCCESS) {
-                return rv;
-            }
-            if (queue->terminated) {
-                return RPA_EOF; /* no more elements ever again */
-            }
-            else {
-                return RPA_EINTR;
-            }
-        }
+      Q_DBG("queue full (intr)", queue);
+      rv = pthread_mutex_unlock(queue->one_big_mutex);
+      if (rv != 0) {
+        return false;
+      }
+      if (queue->terminated) {
+        return false; /* no more elements ever again */
+      } else {
+        return false; //EINTR;
+      }
     }
+  }
 
-    queue->data[queue->in] = data;
-    queue->in++;
-    if (queue->in >= queue->bounds)
-        queue->in -= queue->bounds;
-    queue->nelts++;
+  queue->data[queue->in] = data;
+  queue->in++;
+  if (queue->in >= queue->bounds) {
+    queue->in -= queue->bounds;
+  }
+  queue->nelts++;
 
-    if (queue->empty_waiters) {
-        Q_DBG("sig !empty", queue);
-        rv = rpa_thread_cond_signal(queue->not_empty);
-        if (rv != RPA_SUCCESS) {
-            rpa_thread_mutex_unlock(queue->one_big_mutex);
-            return rv;
-        }
+  if (queue->empty_waiters) {
+    Q_DBG("sig !empty", queue);
+    rv = pthread_cond_signal(queue->not_empty);
+    if (rv != 0) {
+      pthread_mutex_unlock(queue->one_big_mutex);
+      return false;
     }
+  }
 
-    rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-    return rv;
+  pthread_mutex_unlock(queue->one_big_mutex);
+  return true;
 }
 
 /**
@@ -208,48 +202,49 @@ rpa_status_t rpa_queue_push(rpa_queue_t *queue, void *data)
  * the push operation completes successfully, it signals other threads
  * waiting in rpa_queue_pop() that they may continue consuming sockets.
  */
-rpa_status_t rpa_queue_trypush(rpa_queue_t *queue, void *data)
+bool rpa_queue_trypush(rpa_queue_t *queue, void *data)
 {
-    rpa_status_t rv;
+  bool rv;
 
-    if (queue->terminated) {
-        return RPA_EOF; /* no more elements ever again */
+  if (queue->terminated) {
+    return false; /* no more elements ever again */
+  }
+
+  rv = pthread_mutex_lock(queue->one_big_mutex);
+  if (rv != 0) {
+    return false;
+  }
+
+  if (rpa_queue_full(queue)) {
+    rv = pthread_mutex_unlock(queue->one_big_mutex);
+    return false; //EAGAIN;
+  }
+
+  queue->data[queue->in] = data;
+  queue->in++;
+  if (queue->in >= queue->bounds) {
+    queue->in -= queue->bounds;
+  }
+  queue->nelts++;
+
+  if (queue->empty_waiters) {
+    Q_DBG("sig !empty", queue);
+    rv = pthread_cond_signal(queue->not_empty);
+    if (rv != 0) {
+      pthread_mutex_unlock(queue->one_big_mutex);
+      return false;
     }
+  }
 
-    rv = rpa_thread_mutex_lock(queue->one_big_mutex);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
-
-    if (rpa_queue_full(queue)) {
-        rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-        return RPA_EAGAIN;
-    }
-    
-    queue->data[queue->in] = data;
-    queue->in++;
-    if (queue->in >= queue->bounds)
-        queue->in -= queue->bounds;
-    queue->nelts++;
-
-    if (queue->empty_waiters) {
-        Q_DBG("sig !empty", queue);
-        rv  = rpa_thread_cond_signal(queue->not_empty);
-        if (rv != RPA_SUCCESS) {
-            rpa_thread_mutex_unlock(queue->one_big_mutex);
-            return rv;
-        }
-    }
-
-    rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-    return rv;
+  pthread_mutex_unlock(queue->one_big_mutex);
+  return true;
 }
 
 /**
  * not thread safe
  */
-unsigned int rpa_queue_size(rpa_queue_t *queue) {
-    return queue->nelts;
+uint32_t rpa_queue_size(rpa_queue_t *queue) {
+  return queue->nelts;
 }
 
 /**
@@ -258,63 +253,63 @@ unsigned int rpa_queue_size(rpa_queue_t *queue) {
  * Once retrieved, the item is placed into the address specified by
  * 'data'.
  */
-rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data)
+bool rpa_queue_pop(rpa_queue_t *queue, void **data)
 {
-    rpa_status_t rv;
+  bool rv;
 
-    if (queue->terminated) {
-        return RPA_EOF; /* no more elements ever again */
+  if (queue->terminated) {
+    return false; /* no more elements ever again */
+  }
+
+  rv = pthread_mutex_lock(queue->one_big_mutex);
+  if (rv != 0) {
+    return false;
+  }
+
+  /* Keep waiting until we wake up and find that the queue is not empty. */
+  if (rpa_queue_empty(queue)) {
+    if (!queue->terminated) {
+      queue->empty_waiters++;
+      rv = pthread_cond_wait(queue->not_empty, queue->one_big_mutex);
+      queue->empty_waiters--;
+      if (rv != 0) {
+        pthread_mutex_unlock(queue->one_big_mutex);
+        return false;
+      }
     }
-
-    rv = rpa_thread_mutex_lock(queue->one_big_mutex);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
-
-    /* Keep waiting until we wake up and find that the queue is not empty. */
+    /* If we wake up and it's still empty, then we were interrupted */
     if (rpa_queue_empty(queue)) {
-        if (!queue->terminated) {
-            queue->empty_waiters++;
-            rv = rpa_thread_cond_wait(queue->not_empty, queue->one_big_mutex);
-            queue->empty_waiters--;
-            if (rv != RPA_SUCCESS) {
-                rpa_thread_mutex_unlock(queue->one_big_mutex);
-                return rv;
-            }
-        }
-        /* If we wake up and it's still empty, then we were interrupted */
-        if (rpa_queue_empty(queue)) {
-            Q_DBG("queue empty (intr)", queue);
-            rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-            if (rv != RPA_SUCCESS) {
-                return rv;
-            }
-            if (queue->terminated) {
-                return RPA_EOF; /* no more elements ever again */
-            }
-            else {
-                return RPA_EINTR;
-            }
-        }
-    } 
-
-    *data = queue->data[queue->out];
-    queue->nelts--;
-
-    queue->out++;
-    if (queue->out >= queue->bounds)
-        queue->out -= queue->bounds;
-    if (queue->full_waiters) {
-        Q_DBG("signal !full", queue);
-        rv = rpa_thread_cond_signal(queue->not_full);
-        if (rv != RPA_SUCCESS) {
-            rpa_thread_mutex_unlock(queue->one_big_mutex);
-            return rv;
-        }
+      Q_DBG("queue empty (intr)", queue);
+      rv = pthread_mutex_unlock(queue->one_big_mutex);
+      if (rv != 0) {
+        return false;
+      }
+      if (queue->terminated) {
+        return false; /* no more elements ever again */
+      } else {
+        return false; //EINTR;
+      }
     }
+  }
 
-    rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-    return rv;
+  *data = queue->data[queue->out];
+  queue->nelts--;
+
+  queue->out++;
+  if (queue->out >= queue->bounds) {
+    queue->out -= queue->bounds;
+  }
+  if (queue->full_waiters) {
+    Q_DBG("signal !full", queue);
+    rv = pthread_cond_signal(queue->not_full);
+    if (rv != 0) {
+      pthread_mutex_unlock(queue->one_big_mutex);
+      return false;
+    }
+  }
+
+  pthread_mutex_unlock(queue->one_big_mutex);
+  return true;
 }
 
 /**
@@ -322,77 +317,76 @@ rpa_status_t rpa_queue_pop(rpa_queue_t *queue, void **data)
  * items available, return RPA_EAGAIN.  Once retrieved,
  * the item is placed into the address specified by 'data'.
  */
-rpa_status_t rpa_queue_trypop(rpa_queue_t *queue, void **data)
+bool rpa_queue_trypop(rpa_queue_t *queue, void **data)
 {
-    rpa_status_t rv;
+  bool rv;
 
-    if (queue->terminated) {
-        return RPA_EOF; /* no more elements ever again */
+  if (queue->terminated) {
+    return false; /* no more elements ever again */
+  }
+
+  rv = pthread_mutex_lock(queue->one_big_mutex);
+  if (rv != 0) {
+    return false;
+  }
+
+  if (rpa_queue_empty(queue)) {
+    rv = pthread_mutex_unlock(queue->one_big_mutex);
+    return false; //EAGAIN;
+  }
+
+  *data = queue->data[queue->out];
+  queue->nelts--;
+
+  queue->out++;
+  if (queue->out >= queue->bounds) {
+    queue->out -= queue->bounds;
+  }
+  if (queue->full_waiters) {
+    Q_DBG("signal !full", queue);
+    rv = pthread_cond_signal(queue->not_full);
+    if (rv != 0) {
+      pthread_mutex_unlock(queue->one_big_mutex);
+      return false;
     }
+  }
 
-    rv = rpa_thread_mutex_lock(queue->one_big_mutex);
-    if (rv != RPA_SUCCESS) {
-        return rv;
-    }
-
-    if (rpa_queue_empty(queue)) {
-        rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-        return RPA_EAGAIN;
-    } 
-
-    *data = queue->data[queue->out];
-    queue->nelts--;
-
-    queue->out++;
-    if (queue->out >= queue->bounds)
-        queue->out -= queue->bounds;
-    if (queue->full_waiters) {
-        Q_DBG("signal !full", queue);
-        rv = rpa_thread_cond_signal(queue->not_full);
-        if (rv != RPA_SUCCESS) {
-            rpa_thread_mutex_unlock(queue->one_big_mutex);
-            return rv;
-        }
-    }
-
-    rv = rpa_thread_mutex_unlock(queue->one_big_mutex);
-    return rv;
+  pthread_mutex_unlock(queue->one_big_mutex);
+  return true;
 }
 
-rpa_status_t rpa_queue_interrupt_all(rpa_queue_t *queue)
+bool rpa_queue_interrupt_all(rpa_queue_t *queue)
 {
-    rpa_status_t rv;
-    Q_DBG("intr all", queue);    
-    if ((rv = rpa_thread_mutex_lock(queue->one_big_mutex)) != RPA_SUCCESS) {
-        return rv;
-    }
-    rpa_thread_cond_broadcast(queue->not_empty);
-    rpa_thread_cond_broadcast(queue->not_full);
+  bool rv;
+  Q_DBG("intr all", queue);
+  if ((rv = pthread_mutex_lock(queue->one_big_mutex)) != 0) {
+    return false;
+  }
+  pthread_cond_broadcast(queue->not_empty);
+  pthread_cond_broadcast(queue->not_full);
 
-    if ((rv = rpa_thread_mutex_unlock(queue->one_big_mutex)) != RPA_SUCCESS) {
-        return rv;
-    }
+  if ((rv = pthread_mutex_unlock(queue->one_big_mutex)) != 0) {
+    return false;
+  }
 
-    return RPA_SUCCESS;
+  return true;
 }
 
-rpa_status_t rpa_queue_term(rpa_queue_t *queue)
+bool rpa_queue_term(rpa_queue_t *queue)
 {
-    rpa_status_t rv;
+  bool rv;
 
-    if ((rv = rpa_thread_mutex_lock(queue->one_big_mutex)) != RPA_SUCCESS) {
-        return rv;
-    }
+  if ((rv = pthread_mutex_lock(queue->one_big_mutex)) != 0) {
+    return false;
+  }
 
-    /* we must hold one_big_mutex when setting this... otherwise,
-     * we could end up setting it and waking everybody up just after a 
-     * would-be popper checks it but right before they block
-     */
-    queue->terminated = 1;
-    if ((rv = rpa_thread_mutex_unlock(queue->one_big_mutex)) != RPA_SUCCESS) {
-        return rv;
-    }
-    return rpa_queue_interrupt_all(queue);
+  /* we must hold one_big_mutex when setting this... otherwise,
+   * we could end up setting it and waking everybody up just after a
+   * would-be popper checks it but right before they block
+   */
+  queue->terminated = 1;
+  if ((rv = pthread_mutex_unlock(queue->one_big_mutex)) != 0) {
+    return false;
+  }
+  return rpa_queue_interrupt_all(queue);
 }
-
-#endif /* RPA_HAS_THREADS */
