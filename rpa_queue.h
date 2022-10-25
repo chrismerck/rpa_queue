@@ -153,4 +153,9 @@ bool rpa_queue_term(rpa_queue_t *queue);
  */
 void rpa_queue_destroy(rpa_queue_t * queue);
 
+/** free queue memory -- call after destroy 
+ * @note we do not free in destroy() to follow pthreads convention
+*/
+void rpa_queue_free(rpa_queue_t * queue);
+
 #endif /* RPAQUEUE_H */

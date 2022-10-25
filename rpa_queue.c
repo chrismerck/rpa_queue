@@ -88,6 +88,15 @@ void rpa_queue_destroy(rpa_queue_t * queue)
   pthread_mutex_destroy(queue->one_big_mutex);
 }
 
+void rpa_queue_free(rpa_queue_t * queue) 
+{
+  if (queue->data) free(queue->data);
+  if (queue->not_empty) free(queue->not_empty);
+  if (queue->not_full) free(queue->not_full);
+  if (queue->one_big_mutex) free(queue->one_big_mutex);
+  free(queue);
+}
+
 /**
  * Initialize the rpa_queue_t.
  */
