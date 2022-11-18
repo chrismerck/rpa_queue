@@ -22,7 +22,7 @@
 #include <string.h>
 
 // uncomment to print debug messages
-#define QUEUE_DEBUG
+//#define QUEUE_DEBUG
 
 struct rpa_queue_t {
   void **data;
