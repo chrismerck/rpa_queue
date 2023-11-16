@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <pthread.h>
 
 #define RPA_WAIT_NONE     0
 #define RPA_WAIT_FOREVER  -1
@@ -39,9 +40,75 @@
  */
 
 /**
- * opaque structure
+ * @brief Opaque structure representing a thread-safe circular queue.
  */
 typedef struct rpa_queue_t rpa_queue_t;
+
+/**
+ * @struct rpa_queue_t
+ * @brief Opaque structure representing a thread-safe circular queue.
+ *
+ * This structure defines a thread-safe circular queue that supports concurrent access
+ * by multiple threads. The queue uses a fixed-size array to store elements and is designed
+ * to handle both producer and consumer threads efficiently.
+ */
+struct rpa_queue_t {
+  void **data;                  /**< Array to store elements */
+  volatile uint32_t nelts;      /**< Number of elements in the queue */
+  uint32_t in;                  /**< Next empty location in the queue */
+  uint32_t out;                 /**< Next filled location in the queue */
+  uint32_t bounds;              /**< Maximum size of the queue */
+  uint32_t full_waiters;        /**< Number of threads waiting on a full queue */
+  uint32_t empty_waiters;       /**< Number of threads waiting on an empty queue */
+  pthread_mutex_t *one_big_mutex;/**< Mutex for controlling access to the queue */
+  pthread_cond_t *not_empty;    /**< Condition variable for signaling non-empty queue */
+  pthread_cond_t *not_full;     /**< Condition variable for signaling non-full queue */
+  int terminated;               /**< Flag indicating whether the queue is terminated */
+};
+
+/**
+ * @brief Macro to check if the rpa_queue_t is full.
+ *
+ * This macro checks if the number of elements in the queue is equal to the maximum
+ * size of the queue, indicating that the queue is full.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is full, 0 otherwise.
+ */
+#define rpa_queue_full(queue) ((queue)->nelts == (queue)->bounds)
+
+/**
+ * @brief Macro to get the number of free slots in the rpa_queue_t.
+ *
+ * This macro calculates the number of free slots in the queue by subtracting
+ * the current number of elements from the maximum size of the queue.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of free slots in the queue.
+ */
+#define rpa_queue_get_free(queue) (((queue)->bounds) - ((queue)->nelts))
+
+/**
+ * @brief Macro to get the number of taken slots in the rpa_queue_t.
+ *
+ * This macro retrieves the current number of elements in the queue, indicating
+ * the number of slots that have been taken.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of taken slots in the queue.
+ */
+#define rpa_queue_get_taken(queue) ((queue)->nelts)
+
+/**
+ * @brief Macro to check if the rpa_queue_t is empty.
+ *
+ * This macro checks if the number of elements in the queue is zero, indicating
+ * that the queue is empty.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is empty, 0 otherwise.
+ */
+#define rpa_queue_empty(queue) ((queue)->nelts == 0)
 
 /**
  * create a FIFO queue
@@ -73,6 +140,18 @@ bool rpa_queue_push(rpa_queue_t *queue, void *data);
  * @returns RPA_SUCCESS on a successful push
  */
 bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms);
+
+/**
+ * peek an object from the queue without removing it from the queue, blocking if the queue is already empty
+ *
+ * @param queue         the queue
+ * @param data          the data
+ * @param wait_ms       milliseconds to wait
+ * @returns RPA_EINTR   the blocking was interrupted (try again)
+ * @returns RPA_EOF     if the queue has been terminated
+ * @returns RPA_SUCCESS on a successful pop
+ */
+bool rpa_queue_timedpeek(rpa_queue_t *queue, void **data, int wait_ms);
 
 /**
  * pop/get an object from the queue, blocking if the queue is already empty
