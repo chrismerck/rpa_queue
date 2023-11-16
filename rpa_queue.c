@@ -24,19 +24,7 @@
 // uncomment to print debug messages
 //#define QUEUE_DEBUG
 
-struct rpa_queue_t {
-  void **data;
-  volatile uint32_t nelts; /**< # elements */
-  uint32_t in;  /**< next empty location */
-  uint32_t out;   /**< next filled location */
-  uint32_t bounds;/**< max size of queue */
-  uint32_t full_waiters;
-  uint32_t empty_waiters;
-  pthread_mutex_t *one_big_mutex;
-  pthread_cond_t *not_empty;
-  pthread_cond_t *not_full;
-  int terminated;
-};
+
 
 #ifdef QUEUE_DEBUG
 static void Q_DBG(const char*msg, rpa_queue_t *q) {
@@ -49,17 +37,7 @@ static void Q_DBG(const char*msg, rpa_queue_t *q) {
 #define Q_DBG(x,y)
 #endif
 
-/**
- * Detects when the rpa_queue_t is full. This utility function is expected
- * to be called from within critical sections, and is not threadsafe.
- */
-#define rpa_queue_full(queue) ((queue)->nelts == (queue)->bounds)
-
-/**
- * Detects when the rpa_queue_t is empty. This utility function is expected
- * to be called from within critical sections, and is not threadsafe.
- */
-#define rpa_queue_empty(queue) ((queue)->nelts == 0)
+static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bool remove_from_queue);
 
 static void set_timeout(struct timespec * abstime, int wait_ms)
 {
@@ -280,6 +258,12 @@ uint32_t rpa_queue_size(rpa_queue_t *queue) {
   return queue->nelts;
 }
 
+bool rpa_queue_timedpeek(rpa_queue_t *queue, void **data, int wait_ms)
+{
+  return _rpa_queue_timedpop(queue, data, wait_ms, false);
+}
+
+
 /**
  * Retrieves the next item from the queue. If there are no
  * items available, it will block until one becomes available.
@@ -292,6 +276,11 @@ bool rpa_queue_pop(rpa_queue_t *queue, void **data)
 }
 
 bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms)
+{
+	return _rpa_queue_timedpop(queue, data, wait_ms, true);
+}
+
+static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bool remove_from_queue)
 {
   bool rv;
 
@@ -340,12 +329,17 @@ bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms)
   }
 
   *data = queue->data[queue->out];
-  queue->nelts--;
+  if(remove_from_queue)
+  {
+	  queue->nelts--;
 
-  queue->out++;
-  if (queue->out >= queue->bounds) {
-    queue->out -= queue->bounds;
+	  queue->out++;
+	  if (queue->out >= queue->bounds)
+	  {
+	    queue->out -= queue->bounds;
+	  }
   }
+
   if (queue->full_waiters) {
     Q_DBG("signal !full", queue);
     rv = pthread_cond_signal(queue->not_full);
@@ -354,6 +348,8 @@ bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms)
       return false;
     }
   }
+
+  function_return:
 
   pthread_mutex_unlock(queue->one_big_mutex);
   return true;
