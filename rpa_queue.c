@@ -21,6 +21,8 @@
 #include <pthread.h>
 #include <string.h>
 
+#include "bsemaphore.h"
+
 // uncomment to print debug messages
 //#define QUEUE_DEBUG
 
@@ -81,16 +83,16 @@ void rpa_queue_free(rpa_queue_t * queue)
 bool rpa_queue_create(rpa_queue_t **q, uint32_t queue_capacity)
 {
   rpa_queue_t *queue;
-  queue = malloc(sizeof(rpa_queue_t));
+  queue = mmalloc(sizeof(rpa_queue_t));
   if (!queue) {
     return false;
   }
   *q = queue;
   memset(queue, 0, sizeof(rpa_queue_t));
 
-  if (!(queue->one_big_mutex = malloc(sizeof(pthread_mutex_t)))) return false;
-  if (!(queue->not_empty = malloc(sizeof(pthread_cond_t)))) return false;
-  if (!(queue->not_full = malloc(sizeof(pthread_cond_t)))) return false;
+  if (!(queue->one_big_mutex = mmalloc(sizeof(pthread_mutex_t)))) return false;
+  if (!(queue->not_empty = mmalloc(sizeof(pthread_cond_t)))) return false;
+  if (!(queue->not_full = mmalloc(sizeof(pthread_cond_t)))) return false;
 
   pthread_mutexattr_t attr;
   pthread_mutexattr_init(&attr);
@@ -114,7 +116,7 @@ bool rpa_queue_create(rpa_queue_t **q, uint32_t queue_capacity)
   }
 
   /* Set all the data in the queue to NULL */
-  queue->data = malloc(queue_capacity * sizeof(void*));
+  queue->data = mmalloc(queue_capacity * sizeof(void*));
   queue->bounds = queue_capacity;
   queue->nelts = 0;
   queue->in = 0;
@@ -349,7 +351,7 @@ static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bo
     }
   }
 
-  function_return:
+  //function_return:
 
   pthread_mutex_unlock(queue->one_big_mutex);
   return true;
