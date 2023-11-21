@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdbool.h>
 
 // uncomment to print debug messages
 //#define QUEUE_DEBUG
@@ -110,29 +111,7 @@ static void Q_DBG(const char*msg, rpa_queue_t *q) {
  * @param queue Pointer to the rpa_queue_t instance.
  * @return 1 if the queue is full, 0 otherwise.
  */
-#define MC_rpa_queue_full(queue) ((queue)->nelts == (queue)->bounds)
 
-/**
- * @brief Macro to get the number of free slots in the rpa_queue_t.
- *
- * This macro calculates the number of free slots in the queue by subtracting
- * the current number of elements from the maximum size of the queue.
- *
- * @param queue Pointer to the rpa_queue_t instance.
- * @return The number of free slots in the queue.
- */
-#define MC_rpa_queue_get_free(queue) (((queue)->bounds) - ((queue)->nelts))
-
-/**
- * @brief Macro to get the number of taken slots in the rpa_queue_t.
- *
- * This macro retrieves the current number of elements in the queue, indicating
- * the number of slots that have been taken.
- *
- * @param queue Pointer to the rpa_queue_t instance.
- * @return The number of taken slots in the queue.
- */
-#define MC_rpa_queue_get_taken(queue) ((queue)->nelts)
 
 /**
  * @brief Macro to check if the rpa_queue_t is empty.
@@ -144,22 +123,22 @@ static void Q_DBG(const char*msg, rpa_queue_t *q) {
  * @return 1 if the queue is empty, 0 otherwise.
  */
 
-bool rpa_queue_empty(rpa_queue_t *queue)
+bool rpa_queue_empty(const rpa_queue_t *queue)
 {
 	return MC_rpa_queue_empty(queue);
 }
 
-bool rpa_queue_full(queue)
+bool rpa_queue_full(const rpa_queue_t *queue)
 {
 	return MC_rpa_queue_full(queue);
 }
 
-unsigned rpa_queue_get_free(queue)
+unsigned rpa_queue_get_free(const rpa_queue_t *queue)
 {
 	return MC_rpa_queue_get_free(queue);
 }
 
-unsigned rpa_queue_get_taken(queue)
+unsigned rpa_queue_get_taken(const rpa_queue_t *queue)
 {
 	return MC_rpa_queue_get_taken(queue);
 }
