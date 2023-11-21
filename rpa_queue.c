@@ -21,12 +21,30 @@
 #include <pthread.h>
 #include <string.h>
 
-#include "bsemaphore.h"
-
 // uncomment to print debug messages
 //#define QUEUE_DEBUG
 
-
+/**
+ * @struct rpa_queue_t
+ * @brief Opaque structure representing a thread-safe circular queue.
+ *
+ * This structure defines a thread-safe circular queue that supports concurrent access
+ * by multiple threads. The queue uses a fixed-size array to store elements and is designed
+ * to handle both producer and consumer threads efficiently.
+ */
+struct rpa_queue_t {
+  void **data;                  /**< Array to store elements */
+  volatile uint32_t nelts;      /**< Number of elements in the queue */
+  uint32_t in;                  /**< Next empty location in the queue */
+  uint32_t out;                 /**< Next filled location in the queue */
+  uint32_t bounds;              /**< Maximum size of the queue */
+  uint32_t full_waiters;        /**< Number of threads waiting on a full queue */
+  uint32_t empty_waiters;       /**< Number of threads waiting on an empty queue */
+  pthread_mutex_t *one_big_mutex;/**< Mutex for controlling access to the queue */
+  pthread_cond_t *not_empty;    /**< Condition variable for signaling non-empty queue */
+  pthread_cond_t *not_full;     /**< Condition variable for signaling non-full queue */
+  int terminated;               /**< Flag indicating whether the queue is terminated */
+};
 
 #ifdef QUEUE_DEBUG
 static void Q_DBG(const char*msg, rpa_queue_t *q) {
@@ -38,6 +56,114 @@ static void Q_DBG(const char*msg, rpa_queue_t *q) {
 #else
 #define Q_DBG(x,y)
 #endif
+
+/**
+ * @brief Macro to check if the rpa_queue_t is full.
+ *
+ * This macro checks if the number of elements in the queue is equal to the maximum
+ * size of the queue, indicating that the queue is full.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is full, 0 otherwise.
+ */
+#define MC_rpa_queue_full(queue) ((queue)->nelts == (queue)->bounds)
+
+/**
+ * @brief Macro to get the number of free slots in the rpa_queue_t.
+ *
+ * This macro calculates the number of free slots in the queue by subtracting
+ * the current number of elements from the maximum size of the queue.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of free slots in the queue.
+ */
+#define MC_rpa_queue_get_free(queue) (((queue)->bounds) - ((queue)->nelts))
+
+/**
+ * @brief Macro to get the number of taken slots in the rpa_queue_t.
+ *
+ * This macro retrieves the current number of elements in the queue, indicating
+ * the number of slots that have been taken.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of taken slots in the queue.
+ */
+#define MC_rpa_queue_get_taken(queue) ((queue)->nelts)
+
+/**
+ * @brief Macro to check if the rpa_queue_t is empty.
+ *
+ * This macro checks if the number of elements in the queue is zero, indicating
+ * that the queue is empty.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is empty, 0 otherwise.
+ */
+#define MC_rpa_queue_empty(queue) ((queue)->nelts == 0)
+
+/**
+ * @brief Macro to check if the rpa_queue_t is full.
+ *
+ * This macro checks if the number of elements in the queue is equal to the maximum
+ * size of the queue, indicating that the queue is full.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is full, 0 otherwise.
+ */
+#define MC_rpa_queue_full(queue) ((queue)->nelts == (queue)->bounds)
+
+/**
+ * @brief Macro to get the number of free slots in the rpa_queue_t.
+ *
+ * This macro calculates the number of free slots in the queue by subtracting
+ * the current number of elements from the maximum size of the queue.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of free slots in the queue.
+ */
+#define MC_rpa_queue_get_free(queue) (((queue)->bounds) - ((queue)->nelts))
+
+/**
+ * @brief Macro to get the number of taken slots in the rpa_queue_t.
+ *
+ * This macro retrieves the current number of elements in the queue, indicating
+ * the number of slots that have been taken.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of taken slots in the queue.
+ */
+#define MC_rpa_queue_get_taken(queue) ((queue)->nelts)
+
+/**
+ * @brief Macro to check if the rpa_queue_t is empty.
+ *
+ * This macro checks if the number of elements in the queue is zero, indicating
+ * that the queue is empty.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return 1 if the queue is empty, 0 otherwise.
+ */
+
+bool rpa_queue_empty(rpa_queue_t *queue)
+{
+	return MC_rpa_queue_empty(queue);
+}
+
+bool rpa_queue_full(queue)
+{
+	return MC_rpa_queue_full(queue);
+}
+
+unsigned rpa_queue_get_free(queue)
+{
+	return MC_rpa_queue_get_free(queue);
+}
+
+unsigned rpa_queue_get_taken(queue)
+{
+	return MC_rpa_queue_get_taken(queue);
+}
+
 
 static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bool remove_from_queue);
 
@@ -83,16 +209,16 @@ void rpa_queue_free(rpa_queue_t * queue)
 bool rpa_queue_create(rpa_queue_t **q, uint32_t queue_capacity)
 {
   rpa_queue_t *queue;
-  queue = mmalloc(sizeof(rpa_queue_t));
+  queue = malloc(sizeof(rpa_queue_t));
   if (!queue) {
     return false;
   }
   *q = queue;
   memset(queue, 0, sizeof(rpa_queue_t));
 
-  if (!(queue->one_big_mutex = mmalloc(sizeof(pthread_mutex_t)))) return false;
-  if (!(queue->not_empty = mmalloc(sizeof(pthread_cond_t)))) return false;
-  if (!(queue->not_full = mmalloc(sizeof(pthread_cond_t)))) return false;
+  if (!(queue->one_big_mutex = malloc(sizeof(pthread_mutex_t)))) return false;
+  if (!(queue->not_empty = malloc(sizeof(pthread_cond_t)))) return false;
+  if (!(queue->not_full = malloc(sizeof(pthread_cond_t)))) return false;
 
   pthread_mutexattr_t attr;
   pthread_mutexattr_init(&attr);
@@ -116,7 +242,7 @@ bool rpa_queue_create(rpa_queue_t **q, uint32_t queue_capacity)
   }
 
   /* Set all the data in the queue to NULL */
-  queue->data = mmalloc(queue_capacity * sizeof(void*));
+  queue->data = malloc(queue_capacity * sizeof(void*));
   queue->bounds = queue_capacity;
   queue->nelts = 0;
   queue->in = 0;
@@ -158,7 +284,7 @@ bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms)
     return false;
   }
 
-  if (rpa_queue_full(queue)) {
+  if (MC_rpa_queue_full(queue)) {
     if (!queue->terminated) {
       queue->full_waiters++;
       if (wait_ms == RPA_WAIT_FOREVER) {
@@ -176,7 +302,7 @@ bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms)
       }
     }
     /* If we wake up and it's still empty, then we were interrupted */
-    if (rpa_queue_full(queue)) {
+    if (MC_rpa_queue_full(queue)) {
       Q_DBG("queue full (intr)", queue);
       rv = pthread_mutex_unlock(queue->one_big_mutex);
       if (rv != 0) {
@@ -228,7 +354,7 @@ bool rpa_queue_trypush(rpa_queue_t *queue, void *data)
     return false;
   }
 
-  if (rpa_queue_full(queue)) {
+  if (MC_rpa_queue_full(queue)) {
     rv = pthread_mutex_unlock(queue->one_big_mutex);
     return false; //EAGAIN;
   }
@@ -298,7 +424,7 @@ static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bo
   }
 
   /* Keep waiting until we wake up and find that the queue is not empty. */
-  if (rpa_queue_empty(queue)) {
+  if (MC_rpa_queue_empty(queue)) {
     if (!queue->terminated) {
       queue->empty_waiters++;
       if (wait_ms == RPA_WAIT_FOREVER) {
@@ -316,7 +442,7 @@ static bool _rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms, bo
       }
     }
     /* If we wake up and it's still empty, then we were interrupted */
-    if (rpa_queue_empty(queue)) {
+    if (MC_rpa_queue_empty(queue)) {
       Q_DBG("queue empty (intr)", queue);
       rv = pthread_mutex_unlock(queue->one_big_mutex);
       if (rv != 0) {
@@ -375,7 +501,7 @@ bool rpa_queue_trypop(rpa_queue_t *queue, void **data)
     return false;
   }
 
-  if (rpa_queue_empty(queue)) {
+  if (MC_rpa_queue_empty(queue)) {
     rv = pthread_mutex_unlock(queue->one_big_mutex);
     return false; //EAGAIN;
   }
