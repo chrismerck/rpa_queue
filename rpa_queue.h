@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <pthread.h>
 
 #define RPA_WAIT_NONE     0
 #define RPA_WAIT_FOREVER  -1
@@ -39,9 +40,10 @@
  */
 
 /**
- * opaque structure
+ * @brief Opaque structure representing a thread-safe circular queue.
  */
 typedef struct rpa_queue_t rpa_queue_t;
+
 
 /**
  * create a FIFO queue
@@ -73,6 +75,18 @@ bool rpa_queue_push(rpa_queue_t *queue, void *data);
  * @returns RPA_SUCCESS on a successful push
  */
 bool rpa_queue_timedpush(rpa_queue_t *queue, void *data, int wait_ms);
+
+/**
+ * peek an object from the queue without removing it from the queue, blocking if the queue is already empty
+ *
+ * @param queue         the queue
+ * @param data          the data
+ * @param wait_ms       milliseconds to wait
+ * @returns RPA_EINTR   the blocking was interrupted (try again)
+ * @returns RPA_EOF     if the queue has been terminated
+ * @returns RPA_SUCCESS on a successful pop
+ */
+bool rpa_queue_timedpeek(rpa_queue_t *queue, void **data, int wait_ms);
 
 /**
  * pop/get an object from the queue, blocking if the queue is already empty
@@ -157,5 +171,50 @@ void rpa_queue_destroy(rpa_queue_t * queue);
  * @note we do not free in destroy() to follow pthreads convention
 */
 void rpa_queue_free(rpa_queue_t * queue);
+
+
+/**
+ * @brief Check if the rpa_queue_t is empty.
+ *
+ * This function checks if the number of elements in the queue is zero, indicating
+ * that the queue is empty.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return true if the queue is empty, false otherwise.
+ */
+bool rpa_queue_empty(const rpa_queue_t *queue);
+
+/**
+ * @brief Check if the rpa_queue_t is full.
+ *
+ * This function checks if the number of elements in the queue is equal to the maximum
+ * size of the queue, indicating that the queue is full.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return true if the queue is full, false otherwise.
+ */
+bool rpa_queue_full(const rpa_queue_t *queue);
+
+/**
+ * @brief Get the number of free slots in the rpa_queue_t.
+ *
+ * This function calculates the number of free slots in the queue by subtracting
+ * the current number of elements from the maximum size of the queue.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of free slots in the queue.
+ */
+unsigned rpa_queue_get_free(const rpa_queue_t *queue);
+
+/**
+ * @brief Get the number of taken slots in the rpa_queue_t.
+ *
+ * This function retrieves the current number of elements in the queue, indicating
+ * the number of slots that have been taken.
+ *
+ * @param queue Pointer to the rpa_queue_t instance.
+ * @return The number of taken slots in the queue.
+ */
+unsigned rpa_queue_get_taken(const rpa_queue_t *queue);
 
 #endif /* RPAQUEUE_H */
