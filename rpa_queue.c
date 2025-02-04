@@ -339,7 +339,7 @@ bool rpa_queue_timedpop(rpa_queue_t *queue, void **data, int wait_ms)
     }
   }
 
-  *data = queue->data[queue->out];
+  if (data) *data = queue->data[queue->out];
   queue->nelts--;
 
   queue->out++;
@@ -382,7 +382,7 @@ bool rpa_queue_trypop(rpa_queue_t *queue, void **data)
     return false; //EAGAIN;
   }
 
-  *data = queue->data[queue->out];
+  if (data) *data = queue->data[queue->out];
   queue->nelts--;
 
   queue->out++;
