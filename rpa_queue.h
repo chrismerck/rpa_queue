@@ -124,8 +124,9 @@ bool rpa_queue_trypop(rpa_queue_t *queue, void **data);
 /**
  * returns the size of the queue.
  *
- * @warning this is not threadsafe, and is intended for reporting/monitoring
- * of the queue.
+ * Thread safe: the size is read under the queue's lock. It is the size at
+ * that instant, and other threads may have pushed or popped by the time
+ * the caller looks at it.
  * @param queue the queue
  * @returns the size of the queue
  */

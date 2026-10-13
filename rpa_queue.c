@@ -274,10 +274,19 @@ bool rpa_queue_trypush(rpa_queue_t *queue, void *data)
 }
 
 /**
- * not thread safe
+ * Thread safe: nelts is written under the lock by every push and pop, so it
+ * is read under it too. The lock is recursive, and a thread waiting in a
+ * push or a pop does not hold it.
  */
 uint32_t rpa_queue_size(rpa_queue_t *queue) {
-  return queue->nelts;
+  uint32_t nelts;
+
+  if (pthread_mutex_lock(queue->one_big_mutex) != 0) {
+    return 0;
+  }
+  nelts = queue->nelts;
+  pthread_mutex_unlock(queue->one_big_mutex);
+  return nelts;
 }
 
 /**
